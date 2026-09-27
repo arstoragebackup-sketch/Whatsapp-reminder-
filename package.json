@@ -1,5 +1,5 @@
 {
-  "name": "whatsapp-reminder",
+  "name": "upcoming_treatment_reminder",
   "version": "1.0.0",
   "description": "Multi-clinic WhatsApp reminder system",
   "main": "server.js",
