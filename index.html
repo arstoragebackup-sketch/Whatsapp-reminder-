@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>WhatsApp Reminder System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+    <h1>Patient Reminder System</h1>
+    <p>Manage all four clinics in one place</p>
+</header>
+
+<main>
+
+    <section class="card">
+        <h2 id="formTitle">Add Patient Appointment</h2>
+
+        <form id="patientForm">
+
+            <label>Patient Name</label>
+            <input type="text" id="patientName"
+                   placeholder="Enter patient name" required>
+
+            <label>Age</label>
+            <input type="number" id="age"
+                   min="0" max="120" required>
+
+            <label>WhatsApp Number</label>
+            <input type="tel" id="phone"
+                   placeholder="91XXXXXXXXXX"
+                   required>
+
+            <label>Clinic</label>
+            <select id="clinic" required>
+                <option value="">Select clinic</option>
+                <option>Revive Dental & Implant Center</option>
+                <option>AR Plastic Surgery</option>
+                <option>Ayodhya Hospital</option>
+                <option>Dhruva Hospital</option>
+            </select>
+
+            <label>Service Required</label>
+            <select id="service" required>
+                <option value="">Select service</option>
+                <option>Surgery</option>
+                <option>Appointment</option>
+                <option>Review</option>
+                <option>Dressing</option>
+                <option>Follow-up</option>
+                <option>Procedure</option>
+            </select>
+
+            <label>Appointment Date</label>
+            <input type="date" id="date" required>
+
+            <label>Appointment Time</label>
+            <input type="time" id="time" required>
+
+            <button type="submit" id="saveButton">
+                Save Appointment
+            </button>
+
+            <button type="button" id="cancelEdit"
+                    class="secondary hidden">
+                Cancel Editing
+            </button>
+        </form>
+
+        <p id="message"></p>
+    </section>
+
+    <section class="card">
+        <h2>Appointments</h2>
+
+        <div class="filters">
+            <select id="clinicFilter">
+                <option value="">All Clinics</option>
+                <option>Revive Dental & Implant Center</option>
+                <option>AR Plastic Surgery</option>
+                <option>Ayodhya Hospital</option>
+                <option>Dhruva Hospital</option>
+            </select>
+
+            <input type="date" id="dateFilter">
+        </div>
+
+        <button id="refreshButton" class="secondary">
+            Refresh
+        </button>
+
+        <div id="appointments">
+            Loading appointments...
+        </div>
+    </section>
+
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
