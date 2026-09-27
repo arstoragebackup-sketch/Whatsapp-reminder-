@@ -1,0 +1,155 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f3f5f7;
+    color: #222;
+}
+
+header {
+    background: #174c45;
+    color: white;
+    padding: 24px 16px;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0 0 8px;
+    font-size: 24px;
+}
+
+header p {
+    margin: 0;
+    font-size: 14px;
+}
+
+main {
+    max-width: 850px;
+    margin: 20px auto;
+    padding: 0 12px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+}
+
+h2 {
+    font-size: 20px;
+    margin-top: 0;
+}
+
+label {
+    display: block;
+    margin: 15px 0 6px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+input, select {
+    width: 100%;
+    padding: 13px;
+    border: 1px solid #ccd2d8;
+    border-radius: 7px;
+    font-size: 15px;
+    background: white;
+}
+
+button {
+    border: 0;
+    padding: 13px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    background: #167b63;
+    color: white;
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 16px;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+#saveButton {
+    width: 100%;
+}
+
+.secondary {
+    background: #64748b;
+}
+
+.danger {
+    background: #c0392b;
+}
+
+.hidden {
+    display: none;
+}
+
+#message {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.appointment {
+    border: 1px solid #e0e5e9;
+    padding: 14px;
+    border-radius: 9px;
+    margin-top: 12px;
+    overflow-wrap: anywhere;
+}
+
+.appointment h3 {
+    margin: 0 0 10px;
+    color: #174c45;
+}
+
+.appointment p {
+    margin: 6px 0;
+    font-size: 14px;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.actions button {
+    flex: 1;
+    min-width: 100px;
+    margin-top: 10px;
+}
+
+.status {
+    display: inline-block;
+    padding: 5px 8px;
+    background: #e1f3e9;
+    color: #17633e;
+    border-radius: 5px;
+    font-size: 12px;
+}
+
+@media (max-width: 500px) {
+    header h1 {
+        font-size: 20px;
+    }
+    .card {
+        padding: 15px;
+    }
+    .filters {
+        grid-template-columns: 1fr;
+    }
+}
