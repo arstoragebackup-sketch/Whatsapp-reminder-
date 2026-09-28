@@ -1,26 +1,33 @@
-
 const admin = require("firebase-admin");
 
-// Helper function to safely clean and format the private key
 const formatPrivateKey = (key) => {
   if (!key) return "";
-  // Remove surrounding quotes if pasted accidentally and convert literal \n to actual newlines
   return key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
 };
 
-// Validate environment variables before initialization
 const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
+// SAFE DIAGNOSTIC LOGS (No secrets exposed)
+console.log("=== CREDENTIAL DIAGNOSTIC ===");
+console.log("Project ID:", projectId || "MISSING");
+console.log("Client Email:", clientEmail || "MISSING");
+console.log("Private Key Length:", rawPrivateKey ? rawPrivateKey.length : 0);
+console.log("Private Key Starts Correctly:", rawPrivateKey ? rawPrivateKey.trim().startsWith("-----BEGIN PRIVATE KEY-----") : false);
+console.log("Private Key Ends Correctly:", rawPrivateKey ? rawPrivateKey.trim().endsWith("-----END PRIVATE KEY-----") : false);
+console.log("WhatsApp Token Defined:", !!whatsappToken);
+console.log("Phone Number ID Defined:", !!phoneNumberId);
+console.log("==============================");
+
 if (!projectId || !clientEmail || !rawPrivateKey || !whatsappToken || !phoneNumberId) {
   console.error("Fatal Error: Missing one or more required environment variables in GitHub Secrets.");
   process.exit(1);
 }
 
-// Initialize Firebase Admin SDK safely
+// Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
@@ -68,7 +75,6 @@ async function processReminders() {
   const now = admin.firestore.Timestamp.now();
 
   try {
-    // Fetch reminders where 'sent' is not true and 'reminderTime' is due
     const snapshot = await db
       .collection("reminders")
       .where("sent", "!=", true)
@@ -96,7 +102,6 @@ async function processReminders() {
         console.log(`Sending reminder to ${phone} (Doc ID: ${doc.id})...`);
         await sendWhatsAppMessage(phone, message);
 
-        // Mark reminder as successfully sent in Firestore
         await doc.ref.update({
           sent: true,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -112,7 +117,6 @@ async function processReminders() {
   }
 }
 
-// Execute the script
 processReminders()
   .then(() => {
     console.log("Reminder check completed successfully.");
@@ -122,4 +126,3 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
-             
