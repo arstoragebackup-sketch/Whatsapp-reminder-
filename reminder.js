@@ -1,172 +1,166 @@
 const admin = require("firebase-admin");
-const axios = require("axios");
+
+// ===============================
+// Firebase configuration
+// ===============================
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+};
 
 admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY
-      .replace(/^"|"$/g, "")
-      .replace(/\\n/g, "\n")
-      .trim(),
-  }),
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
 
+// ===============================
+// WhatsApp configuration
+// ===============================
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
-const TEMPLATE_NAME = "upcoming-treatment-reminder";
-const TEMPLATE_LANGUAGE = "en_US";
-
-async function sendWhatsAppMessage(
-  phone,
-  patientName,
-  clinicName,
-  appointmentDate,
-  appointmentTime,
-) {
-  const url =
-    `https://graph.facebook.com/v23.0/` +
-    `${PHONE_NUMBER_ID}/messages`;
-
-  const message = {
-    messaging_product: "whatsapp",
-    to: phone,
-    type: "template",
-    template: {
-      name: TEMPLATE_NAME,
-      language: {
-        code: TEMPLATE_LANGUAGE,
-      },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            {
-              type: "text",
-              text: patientName,
-            },
-            {
-              type: "text",
-              text: clinicName,
-            },
-            {
-              type: "text",
-              text: appointmentDate,
-            },
-            {
-              type: "text",
-              text: appointmentTime,
-            },
-          ],
-        },
-      ],
-    },
-  };
-
-  const response = await axios.post(url, message, {
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  return response.data;
+if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+  console.error("❌ WhatsApp environment variables are missing.");
+  process.exit(1);
 }
 
-async function checkReminders() {
-  const now = new Date();
+// ===============================
+// Send WhatsApp message
+// ===============================
+async function sendWhatsAppMessage(phoneNumber, message) {
+  const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
 
-  const snapshot = await db
-    .collection("appointments")
-    .where("status", "==", "booked")
-    .get();
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: phoneNumber,
+        type: "text",
+        text: {
+          preview_url: false,
+          body: message,
+        },
+      }),
+    });
 
-  console.log(`Found ${snapshot.size} booked appointments.`);
+    const data = await response.json();
 
-  for (const appointmentDoc of snapshot.docs) {
-    const appointment = appointmentDoc.data();
-
-    if (
-      !appointment.appointmentDate ||
-      !appointment.appointmentTime ||
-      !appointment.phone
-    ) {
-      continue;
+    if (!response.ok) {
+      console.error("❌ WhatsApp API error:", data);
+      return false;
     }
 
-    const appointmentDateTime = new Date(
-      `${appointment.appointmentDate}T` +
-        `${appointment.appointmentTime}:00+05:30`,
-    );
-
-    const differenceMinutes =
-      (appointmentDateTime.getTime() - now.getTime()) / 60000;
-
-    let reminderType = null;
-
-    // 24-hour reminder
-    if (differenceMinutes >= 1435 && differenceMinutes <= 1445) {
-      reminderType = "24h";
-    }
-
-    // 2-hour reminder
-    if (differenceMinutes >= 115 && differenceMinutes <= 125) {
-      reminderType = "2h";
-    }
-
-    if (!reminderType) {
-      continue;
-    }
-
-    const reminderId = `${appointmentDoc.id}_${reminderType}`;
-
-    const reminderRef = db
-      .collection("reminders")
-      .doc(reminderId);
-
-    const reminderDoc = await reminderRef.get();
-
-    // Don't send the same reminder twice
-    if (reminderDoc.exists) {
-      continue;
-    }
-
-    try {
-      await sendWhatsAppMessage(
-        appointment.phone,
-        appointment.patientName,
-        appointment.clinicName,
-        appointment.appointmentDate,
-        appointment.appointmentTime,
-      );
-
-      await reminderRef.set({
-        appointmentId: appointmentDoc.id,
-        type: reminderType,
-        phone: appointment.phone,
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      console.log(
-        `Sent ${reminderType} reminder to ${appointment.patientName}`,
-      );
-    } catch (error) {
-      console.error(
-        `Failed to send ${reminderType} reminder:`,
-        error.response?.data || error.message,
-      );
-    }
+    console.log("✅ WhatsApp message sent:", phoneNumber);
+    return true;
+  } catch (error) {
+    console.error("❌ WhatsApp request failed:", error);
+    return false;
   }
 }
 
-checkReminders()
+// ===============================
+// Main reminder function
+// ===============================
+async function sendReminders() {
+  console.log("🔄 Checking reminders...");
+
+  try {
+    const snapshot = await db.collection("reminders").get();
+
+    if (snapshot.empty) {
+      console.log("ℹ️ No reminders found.");
+      return;
+    }
+
+    const now = new Date();
+
+    for (const doc of snapshot.docs) {
+      const reminder = doc.data();
+
+      console.log(`📋 Checking reminder: ${doc.id}`);
+
+      // Expected Firestore fields:
+      // phone
+      // message
+      // reminderTime
+      // sent
+
+      if (!reminder.phone || !reminder.message || !reminder.reminderTime) {
+        console.log(`⚠️ Skipping ${doc.id}: missing required fields.`);
+        continue;
+      }
+
+      // Don't send already-sent reminders
+      if (reminder.sent === true) {
+        console.log(`✓ ${doc.id} already sent.`);
+        continue;
+      }
+
+      let reminderDate;
+
+      // Handle Firestore Timestamp
+      if (
+        reminder.reminderTime &&
+        typeof reminder.reminderTime.toDate === "function"
+      ) {
+        reminderDate = reminder.reminderTime.toDate();
+      } else {
+        reminderDate = new Date(reminder.reminderTime);
+      }
+
+      if (isNaN(reminderDate.getTime())) {
+        console.log(`⚠️ Invalid reminder time for ${doc.id}`);
+        continue;
+      }
+
+      // Check whether reminder time has arrived
+      if (reminderDate <= now) {
+        console.log(`📲 Sending reminder for ${doc.id}...`);
+
+        const success = await sendWhatsAppMessage(
+          reminder.phone,
+          reminder.message
+        );
+
+        if (success) {
+          await db.collection("reminders").doc(doc.id).update({
+            sent: true,
+            sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          console.log(`✅ Reminder ${doc.id} marked as sent.`);
+        }
+      } else {
+        console.log(
+          `⏳ Reminder ${doc.id} is scheduled for ${reminderDate.toISOString()}`
+        );
+      }
+    }
+
+    console.log("✅ Reminder check completed.");
+  } catch (error) {
+    console.error("❌ Error checking reminders:", error);
+    process.exit(1);
+  }
+}
+
+// ===============================
+// Run
+// ===============================
+sendReminders()
   .then(() => {
-    console.log("Reminder check completed.");
+    console.log("🏁 Finished.");
+    process.exit(0);
   })
   .catch((error) => {
-    console.error(error);
+    console.error("❌ Fatal error:", error);
     process.exit(1);
   });
