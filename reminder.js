@@ -1,32 +1,20 @@
 const admin = require("firebase-admin");
 
-// Universal credential loader
-let credentialConfig;
+console.log("=== CLINIC REMINDER SYSTEM STARTING ===");
 
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  try {
-    console.log("Loading credentials from FIREBASE_SERVICE_ACCOUNT JSON secret...");
-    credentialConfig = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } catch (error) {
-    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", error.message);
-    process.exit(1);
-  }
-} else {
-  console.log("Loading credentials from individual Firebase secrets...");
-  const formatPrivateKey = (key) => {
-    if (!key) return "";
-    return key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
-  };
-
-  credentialConfig = {
-    projectId: "clinic-appointment-reminder",
-    clientEmail: "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com",
-    privateKey: formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-  };
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.error("Fatal Error: FIREBASE_SERVICE_ACCOUNT secret is missing from GitHub Actions!");
+  process.exit(1);
 }
 
-console.log("Project ID:", credentialConfig.projectId || credentialConfig.project_id);
-console.log("Client Email:", credentialConfig.clientEmail || credentialConfig.client_email);
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  console.log("Successfully parsed service account JSON for project:", serviceAccount.project_id);
+} catch (error) {
+  console.error("Fatal Error: Failed to parse FIREBASE_SERVICE_ACCOUNT as JSON:", error.message);
+  process.exit(1);
+}
 
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
@@ -40,7 +28,7 @@ if (!whatsappToken || !phoneNumberId) {
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
-      credential: admin.credential.cert(credentialConfig),
+      credential: admin.credential.cert(serviceAccount),
     });
     console.log("Firebase Admin initialized successfully.");
   } catch (error) {
@@ -131,3 +119,4 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
+        
