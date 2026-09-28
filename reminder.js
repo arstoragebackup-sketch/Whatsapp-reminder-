@@ -1,53 +1,41 @@
+console.log("=== CLINIC REMINDER RUN: VERSION 2026-09-28-FINAL ===");
 const admin = require("firebase-admin");
 
-// Hardcoded verified credentials as a foolproof fallback
-let serviceAccount = {
-  projectId: "clinic-appointment-reminder",
-  clientEmail: "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com",
-};
+// Hardcoded verified identifiers so they can never be missing or undefined
+const projectId = "clinic-appointment-reminder";
+const clientEmail = "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com";
 
-// Try loading private key from GitHub Secrets (either JSON secret or individual private key)
-let privateKey = "";
-
+// Extract private key safely from secrets
+let rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || "";
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     if (parsed.private_key) {
-      privateKey = parsed.private_key;
+      rawPrivateKey = parsed.private_key;
     }
   } catch (e) {
-    console.log("Could not parse FIREBASE_SERVICE_ACCOUNT as JSON, trying individual key...");
+    // Fallback to individual secret if JSON parse fails
   }
 }
 
-if (!privateKey && process.env.FIREBASE_PRIVATE_KEY) {
-  privateKey = process.env.FIREBASE_PRIVATE_KEY;
-}
+const privateKey = rawPrivateKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
 
-// Clean the private key formatting
-if (privateKey) {
-  privateKey = privateKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
-}
-
-console.log("=== FINAL INITIALIZATION CHECK ===");
-console.log("Project ID:", serviceAccount.projectId);
-console.log("Client Email:", serviceAccount.clientEmail);
-console.log("Private Key Loaded:", !!privateKey);
-console.log("Private Key Length:", privateKey ? privateKey.length : 0);
-console.log("==================================");
+console.log("Project ID:", projectId);
+console.log("Client Email:", clientEmail);
+console.log("Private Key Length:", privateKey.length);
 
 if (!privateKey) {
-  console.error("Fatal Error: Private key could not be loaded from GitHub Secrets.");
+  console.error("Fatal Error: Private key is missing from GitHub Secrets.");
   process.exit(1);
 }
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK safely
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: serviceAccount.projectId,
-        clientEmail: serviceAccount.clientEmail,
+        projectId: projectId,
+        clientEmail: clientEmail,
         privateKey: privateKey,
       }),
     });
@@ -142,3 +130,4 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
+      
