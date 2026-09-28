@@ -1,49 +1,54 @@
 const admin = require("firebase-admin");
 
-console.log("=== PARSING GITHUB SERVICE ACCOUNT SECRET ===");
+// Hardcoded verified credentials as a foolproof fallback
+let serviceAccount = {
+  projectId: "clinic-appointment-reminder",
+  clientEmail: "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com",
+};
 
-let serviceAccount;
-try {
-  const rawSecret = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!rawSecret) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT secret environment variable is empty.");
+// Try loading private key from GitHub Secrets (either JSON secret or individual private key)
+let privateKey = "";
+
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (parsed.private_key) {
+      privateKey = parsed.private_key;
+    }
+  } catch (e) {
+    console.log("Could not parse FIREBASE_SERVICE_ACCOUNT as JSON, trying individual key...");
   }
-  
-  // Parse the JSON string from GitHub secrets
-  const parsed = JSON.parse(rawSecret);
+}
 
-  // Explicitly map out the required properties
-  serviceAccount = {
-    projectId: parsed.project_id || parsed.projectId,
-    clientEmail: parsed.client_email || parsed.clientEmail,
-    privateKey: parsed.private_key || parsed.privateKey,
-  };
+if (!privateKey && process.env.FIREBASE_PRIVATE_KEY) {
+  privateKey = process.env.FIREBASE_PRIVATE_KEY;
+}
 
-  console.log("Mapped Project ID:", serviceAccount.projectId ? "EXISTS" : "MISSING");
-  console.log("Mapped Client Email:", serviceAccount.clientEmail ? "EXISTS" : "MISSING");
-  console.log("Mapped Private Key Length:", serviceAccount.privateKey ? serviceAccount.privateKey.length : 0);
+// Clean the private key formatting
+if (privateKey) {
+  privateKey = privateKey.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+}
 
-} catch (error) {
-  console.error("Fatal Error: Failed to parse or map FIREBASE_SERVICE_ACCOUNT JSON:", error.message);
+console.log("=== FINAL INITIALIZATION CHECK ===");
+console.log("Project ID:", serviceAccount.projectId);
+console.log("Client Email:", serviceAccount.clientEmail);
+console.log("Private Key Loaded:", !!privateKey);
+console.log("Private Key Length:", privateKey ? privateKey.length : 0);
+console.log("==================================");
+
+if (!privateKey) {
+  console.error("Fatal Error: Private key could not be loaded from GitHub Secrets.");
   process.exit(1);
 }
 
-const whatsappToken = process.env.WHATSAPP_TOKEN;
-const phoneNumberId = process.env.PHONE_NUMBER_ID;
-
-if (!whatsappToken || !phoneNumberId) {
-  console.error("Fatal Error: Missing WhatsApp Token or Phone Number ID in GitHub Secrets.");
-  process.exit(1);
-}
-
-// Initialize Firebase Admin SDK safely
+// Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: serviceAccount.projectId,
         clientEmail: serviceAccount.clientEmail,
-        privateKey: serviceAccount.privateKey,
+        privateKey: privateKey,
       }),
     });
     console.log("Firebase Admin initialized successfully.");
@@ -56,6 +61,8 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 async function sendWhatsAppMessage(phone, message) {
+  const whatsappToken = process.env.WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.PHONE_NUMBER_ID;
   const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
 
   const response = await fetch(url, {
@@ -116,7 +123,7 @@ async function processReminders() {
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         console.log(`Successfully sent and marked reminder ${doc.id} as sent.`);
-      } cmatch (err) {
+      } catch (err) {
         console.error(`Failed to send reminder ${doc.id}:`, err.message);
       }
     }
@@ -135,4 +142,3 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
-                      
