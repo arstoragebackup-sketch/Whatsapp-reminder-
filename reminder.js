@@ -1,40 +1,34 @@
 const admin = require("firebase-admin");
 
-// Helper function to safely clean and format the private key from GitHub Secrets
-const formatPrivateKey = (key) => {
-  if (!key) return "";
-  return key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
-};
+// Parse the full service account JSON from GitHub Secrets
+let serviceAccount;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+} catch (error) {
+  console.error("Fatal Error: FIREBASE_SERVICE_ACCOUNT secret is not valid JSON.");
+  process.exit(1);
+}
 
-// HARDCODED CONFIGURATION FROM YOUR FIREBASE SERVICE ACCOUNT
-const projectId = "clinic-appointment-reminder";
-const clientEmail = "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com";
-
-// SECRETS LOADED FROM GITHUB ACTIONS
-const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
 console.log("=== CLINIC REMINDER SYSTEM DIAGNOSTIC ===");
-console.log("Project ID set:", projectId);
-console.log("Client Email set:", clientEmail);
-console.log("Private Key Length:", rawPrivateKey ? rawPrivateKey.length : 0);
+console.log("Project ID loaded:", serviceAccount.project_id);
+console.log("Client Email loaded:", serviceAccount.client_email);
+console.log("WhatsApp Token Defined:", !!whatsappToken);
+console.log("Phone Number ID Defined:", !!phoneNumberId);
 console.log("=========================================");
 
-if (!rawPrivateKey || !whatsappToken || !phoneNumberId) {
-  console.error("Fatal Error: Missing required secrets (Private Key, WhatsApp Token, or Phone ID) in GitHub Actions.");
+if (!whatsappToken || !phoneNumberId) {
+  console.error("Fatal Error: Missing WhatsApp Token or Phone Number ID in GitHub Secrets.");
   process.exit(1);
 }
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK using the parsed service account object
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: projectId,
-        clientEmail: clientEmail,
-        privateKey: formatPrivateKey(rawPrivateKey),
-      }),
+      credential: admin.credential.cert(serviceAccount),
     });
     console.log("Firebase Admin initialized successfully.");
   } catch (error) {
@@ -74,7 +68,6 @@ async function processReminders() {
   const now = admin.firestore.Timestamp.now();
 
   try {
-    // Query reminders where sent is not true and reminderTime is due
     const snapshot = await db
       .collection("reminders")
       .where("sent", "!=", true)
@@ -102,7 +95,6 @@ async function processReminders() {
         console.log(`Sending reminder to ${phone} (Doc ID: ${doc.id})...`);
         await sendWhatsAppMessage(phone, message);
 
-        // Mark as sent in Firestore
         await doc.ref.update({
           sent: true,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -118,7 +110,6 @@ async function processReminders() {
   }
 }
 
-// Execute the script
 processReminders()
   .then(() => {
     console.log("Reminder check completed successfully.");
