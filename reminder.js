@@ -1,34 +1,46 @@
 const admin = require("firebase-admin");
 
-// Parse the full service account JSON from GitHub Secrets
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-} catch (error) {
-  console.error("Fatal Error: FIREBASE_SERVICE_ACCOUNT secret is not valid JSON.");
-  process.exit(1);
+// Universal credential loader
+let credentialConfig;
+
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  try {
+    console.log("Loading credentials from FIREBASE_SERVICE_ACCOUNT JSON secret...");
+    credentialConfig = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } catch (error) {
+    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", error.message);
+    process.exit(1);
+  }
+} else {
+  console.log("Loading credentials from individual Firebase secrets...");
+  const formatPrivateKey = (key) => {
+    if (!key) return "";
+    return key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+  };
+
+  credentialConfig = {
+    projectId: "clinic-appointment-reminder",
+    clientEmail: "firebase-adminsdk-fbsvc@clinic-appointment-reminder.iam.gserviceaccount.com",
+    privateKey: formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+  };
 }
+
+console.log("Project ID:", credentialConfig.projectId || credentialConfig.project_id);
+console.log("Client Email:", credentialConfig.clientEmail || credentialConfig.client_email);
 
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
-
-console.log("=== CLINIC REMINDER SYSTEM DIAGNOSTIC ===");
-console.log("Project ID loaded:", serviceAccount.project_id);
-console.log("Client Email loaded:", serviceAccount.client_email);
-console.log("WhatsApp Token Defined:", !!whatsappToken);
-console.log("Phone Number ID Defined:", !!phoneNumberId);
-console.log("=========================================");
 
 if (!whatsappToken || !phoneNumberId) {
   console.error("Fatal Error: Missing WhatsApp Token or Phone Number ID in GitHub Secrets.");
   process.exit(1);
 }
 
-// Initialize Firebase Admin SDK using the parsed service account object
+// Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert(credentialConfig),
     });
     console.log("Firebase Admin initialized successfully.");
   } catch (error) {
