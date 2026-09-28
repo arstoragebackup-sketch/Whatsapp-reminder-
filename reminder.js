@@ -1,18 +1,22 @@
 const admin = require("firebase-admin");
 
-console.log("=== CLINIC REMINDER SYSTEM STARTING ===");
+console.log("=== CHECKING FIREBASE SERVICE ACCOUNT ===");
+const rawSecret = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-  console.error("Fatal Error: FIREBASE_SERVICE_ACCOUNT secret is missing from GitHub Actions!");
+if (!rawSecret) {
+  console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT secret is missing from GitHub Actions!");
   process.exit(1);
 }
 
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  console.log("Successfully parsed service account JSON for project:", serviceAccount.project_id);
+  serviceAccount = JSON.parse(rawSecret);
+  console.log("Successfully parsed JSON.");
+  console.log("Project ID:", serviceAccount.project_id);
+  console.log("Client Email:", serviceAccount.client_email);
+  console.log("Private Key exists:", !!serviceAccount.private_key);
 } catch (error) {
-  console.error("Fatal Error: Failed to parse FIREBASE_SERVICE_ACCOUNT as JSON:", error.message);
+  console.error("CRITICAL: Failed to parse secret as JSON. Is the whole JSON file pasted correctly?", error.message);
   process.exit(1);
 }
 
@@ -20,7 +24,7 @@ const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
 if (!whatsappToken || !phoneNumberId) {
-  console.error("Fatal Error: Missing WhatsApp Token or Phone Number ID in GitHub Secrets.");
+  console.error("Fatal Error: Missing WhatsApp Token or Phone ID.");
   process.exit(1);
 }
 
@@ -119,4 +123,3 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
-        
