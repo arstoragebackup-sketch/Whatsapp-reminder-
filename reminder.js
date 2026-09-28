@@ -1,22 +1,30 @@
 const admin = require("firebase-admin");
 
-console.log("=== CHECKING FIREBASE SERVICE ACCOUNT ===");
-const rawSecret = process.env.FIREBASE_SERVICE_ACCOUNT;
-
-if (!rawSecret) {
-  console.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT secret is missing from GitHub Actions!");
-  process.exit(1);
-}
+console.log("=== PARSING GITHUB SERVICE ACCOUNT SECRET ===");
 
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(rawSecret);
-  console.log("Successfully parsed JSON.");
-  console.log("Project ID:", serviceAccount.project_id);
-  console.log("Client Email:", serviceAccount.client_email);
-  console.log("Private Key exists:", !!serviceAccount.private_key);
+  const rawSecret = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!rawSecret) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT secret environment variable is empty.");
+  }
+  
+  // Parse the JSON string from GitHub secrets
+  const parsed = JSON.parse(rawSecret);
+
+  // Explicitly map out the required properties
+  serviceAccount = {
+    projectId: parsed.project_id || parsed.projectId,
+    clientEmail: parsed.client_email || parsed.clientEmail,
+    privateKey: parsed.private_key || parsed.privateKey,
+  };
+
+  console.log("Mapped Project ID:", serviceAccount.projectId ? "EXISTS" : "MISSING");
+  console.log("Mapped Client Email:", serviceAccount.clientEmail ? "EXISTS" : "MISSING");
+  console.log("Mapped Private Key Length:", serviceAccount.privateKey ? serviceAccount.privateKey.length : 0);
+
 } catch (error) {
-  console.error("CRITICAL: Failed to parse secret as JSON. Is the whole JSON file pasted correctly?", error.message);
+  console.error("Fatal Error: Failed to parse or map FIREBASE_SERVICE_ACCOUNT JSON:", error.message);
   process.exit(1);
 }
 
@@ -24,15 +32,19 @@ const whatsappToken = process.env.WHATSAPP_TOKEN;
 const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
 if (!whatsappToken || !phoneNumberId) {
-  console.error("Fatal Error: Missing WhatsApp Token or Phone ID.");
+  console.error("Fatal Error: Missing WhatsApp Token or Phone Number ID in GitHub Secrets.");
   process.exit(1);
 }
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK safely
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert({
+        projectId: serviceAccount.projectId,
+        clientEmail: serviceAccount.clientEmail,
+        privateKey: serviceAccount.privateKey,
+      }),
     });
     console.log("Firebase Admin initialized successfully.");
   } catch (error) {
@@ -104,7 +116,7 @@ async function processReminders() {
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         console.log(`Successfully sent and marked reminder ${doc.id} as sent.`);
-      } catch (err) {
+      } cmatch (err) {
         console.error(`Failed to send reminder ${doc.id}:`, err.message);
       }
     }
@@ -123,3 +135,4 @@ processReminders()
     console.error("Unhandled fatal error during execution:", error);
     process.exit(1);
   });
+                      
