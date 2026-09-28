@@ -1,33 +1,125 @@
+
 const admin = require("firebase-admin");
 
-console.log("=== FIREBASE KEY CHECK ===");
+// Helper function to safely clean and format the private key
+const formatPrivateKey = (key) => {
+  if (!key) return "";
+  // Remove surrounding quotes if pasted accidentally and convert literal \n to actual newlines
+  return key.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+};
 
-const rawKey = process.env.FIREBASE_PRIVATE_KEY || "";
+// Validate environment variables before initialization
+const projectId = process.env.FIREBASE_PROJECT_ID;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+const whatsappToken = process.env.WHATSAPP_TOKEN;
+const phoneNumberId = process.env.PHONE_NUMBER_ID;
 
-console.log("Key exists:", rawKey.length > 0);
-console.log("Key length:", rawKey.length);
-console.log("Starts with:", JSON.stringify(rawKey.substring(0, 30)));
-console.log("Ends with:", JSON.stringify(rawKey.substring(rawKey.length - 30)));
+if (!projectId || !clientEmail || !rawPrivateKey || !whatsappToken || !phoneNumberId) {
+  console.error("Fatal Error: Missing one or more required environment variables in GitHub Secrets.");
+  process.exit(1);
+}
 
-const privateKey = rawKey
-  .replace(/\\n/g, "\n")
-  .replace(/\r/g, "");
+// Initialize Firebase Admin SDK safely
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: projectId,
+        clientEmail: clientEmail,
+        privateKey: formatPrivateKey(rawPrivateKey),
+      }),
+    });
+    console.log("Firebase Admin initialized successfully.");
+  } catch (error) {
+    console.error("Failed to initialize Firebase Admin:", error.message);
+    process.exit(1);
+  }
+}
 
-console.log("After conversion length:", privateKey.length);
-console.log(
-  "Converted starts with:",
-  JSON.stringify(privateKey.substring(0, 30))
-);
+const db = admin.firestore();
 
-console.log("Has BEGIN:", privateKey.includes("-----BEGIN PRIVATE KEY-----"));
-console.log("Has END:", privateKey.includes("-----END PRIVATE KEY-----"));
+async function sendWhatsAppMessage(phone, message) {
+  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
 
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: privateKey,
-  }),
-});
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${whatsappToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "text",
+      text: { body: message },
+    }),
+  });
 
-console.log("✅ Firebase initialized successfully");
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`WhatsApp API Error (${response.status}): ${JSON.stringify(data)}`);
+  }
+  return data;
+}
+
+async function processReminders() {
+  console.log("Checking Firestore for pending reminders...");
+  const now = admin.firestore.Timestamp.now();
+
+  try {
+    // Fetch reminders where 'sent' is not true and 'reminderTime' is due
+    const snapshot = await db
+      .collection("reminders")
+      .where("sent", "!=", true)
+      .where("reminderTime", "<=", now)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("No pending reminders due at this time.");
+      return;
+    }
+
+    console.log(`Found ${snapshot.size} reminder(s) ready to send.`);
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const phone = data.phone;
+      const message = data.message;
+
+      if (!phone || !message) {
+        console.warn(`Skipping document ${doc.id}: Missing 'phone' or 'message' field.`);
+        continue;
+      }
+
+      try {
+        console.log(`Sending reminder to ${phone} (Doc ID: ${doc.id})...`);
+        await sendWhatsAppMessage(phone, message);
+
+        // Mark reminder as successfully sent in Firestore
+        await doc.ref.update({
+          sent: true,
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(`Successfully sent and marked reminder ${doc.id} as sent.`);
+      } catch (err) {
+        console.error(`Failed to send reminder ${doc.id}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error("Error querying Firestore collection:", error.message);
+    throw error;
+  }
+}
+
+// Execute the script
+processReminders()
+  .then(() => {
+    console.log("Reminder check completed successfully.");
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error("Unhandled fatal error during execution:", error);
+    process.exit(1);
+  });
+             
